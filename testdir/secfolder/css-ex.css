@@ -1,0 +1,20 @@
+body {
+  padding-left: 11em;
+  font-family: Arial;
+  color: black;
+  background-color: #ffffff;
+}
+
+h1 {
+  font-family: Arial;
+  color: #ff0000;
+  font-size: 40px;
+}
+
+a {
+  color: #ff0000;
+  font-weight: bold;
+}
+a:hover {
+  color: #000000;
+}
