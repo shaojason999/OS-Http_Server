@@ -38,14 +38,18 @@ int main(int argc, char *argv[])
         printf("connect failed\n");
         return -1;
     }
-    char *msg="sent from client";
+//    char *msg="sent from client";
+    char msg[256];
+    memset(msg, 0, sizeof(msg));
+    sprintf(msg,"GET %s HTTP/1.x\r\nHOST: %s:%s\r\n\r\n",argv[2], argv[4], argv[6]);
     send(sock_fd, msg, strlen(msg), 0);
-    printf("message sent\n");
-    while(recv(sock_fd, buf, buf_len, 0)>0) {
-        printf("%s\n",buf);
+
+    while(recv(sock_fd, buf, buf_len-1, 0)) {
+        printf("%s",buf);
         memset(buf, 0, buf_len);
     }
-
+    printf("\n");
     close(sock_fd);
     return 0;
+
 }
