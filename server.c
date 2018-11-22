@@ -95,12 +95,14 @@ int output(int result, int sock_client, char *file_dir)
     if(result==1) {
         DIR *dir_ptr;
         struct dirent *direntp;
-        char temp[256], dest[256], name_of_file_dir[256];
+        char temp[256], dest[256];
+        char name_of_file_dir[256];
+        char file_dir_arr[128][256];
         memset(temp, 0, sizeof(temp));
         sprintf(temp, ".%s",file_dir);
-        memset(file_dir, 0, sizeof(char)*128);
-        strcpy(file_dir, temp);
-        dir_ptr=opendir(file_dir);
+//        memset(file_dir, 0, sizeof(char)*128);
+        //      strcpy(file_dir, temp);
+        dir_ptr=opendir(temp);
         if(dir_ptr==NULL) {
             printf("opendir failed\n");
             sprintf(buf,"%s404 NOT_FOUND\n%s\n%s\n\n",hearder[0],hearder[1],hearder[2]);
@@ -109,12 +111,14 @@ int output(int result, int sock_client, char *file_dir)
         }
         memset(dest, 0, sizeof(dest));
         memset(temp, 0, sizeof(temp));
-        int j=0;
+        int i=0,j=0,flag=0;
         while((direntp=readdir(dir_ptr))!=NULL) {
             memset(name_of_file_dir, 0, sizeof(name_of_file_dir));
             strcpy(name_of_file_dir,direntp->d_name);
             if(name_of_file_dir[0]=='.')
                 continue;
+            memset(file_dir_arr[i], 0, sizeof(file_dir_arr[i]));
+            strcpy(file_dir_arr[i++],name_of_file_dir);
             if(j==0) {
                 sprintf(dest,"%s",name_of_file_dir);
                 ++j;
@@ -126,6 +130,19 @@ int output(int result, int sock_client, char *file_dir)
         memset(buf, 0, sizeof(buf));
         sprintf(buf,"%s200 OK\n%s directory\n%s\n\n%s",hearder[0],hearder[1],hearder[2],dest);
         send(sock_client, buf, strlen(buf), 0);
+        int num=i;
+        char Temp[i][256];
+        for(i=0; i<num; ++i) {
+            memset(Temp[i], 0, sizeof(Temp[i]));
+            for(j=1; j<strlen(file_dir_arr[i]); ++j)
+                if(file_dir_arr[i][j]=='.') {
+                    sprintf(Temp[i],"%s/%s",file_dir,file_dir_arr[i]);	/*a file*/
+//printf("%d %s %s\n",strlen(file_dir_arr[i]),Temp[i],file_dir_arr[i]);
+                    /*category*/
+                    output(0,sock_client,Temp[i]);
+                    break;
+                }
+        }
         closedir(dir_ptr);
     }
     if(result==5) {
@@ -140,19 +157,20 @@ int output(int result, int sock_client, char *file_dir)
     } else if(result==0) {
 
         /*get the file or dir*/
-        if(result==0) {
-            fp=fopen(&file_dir[1], "rb");	/*ignore the first slash'/'*/
+        char tttemp[128];
+        memset(tttemp, 0, sizeof(tttemp));
+        sprintf(tttemp,".%s",file_dir);	/*open a file with ./xxx/xxx*/
+        fp=fopen(tttemp,"rb");
 
-            if(fp==NULL) {
-                sprintf(buf,"%s404 NOT_FOUND\n%s\n%s\n\n",hearder[0],hearder[1],hearder[2]);
-                send(sock_client, buf, strlen(buf), 0);
-            } else {
-                sprintf(buf, "%s200 OK\n%s%s\n%s\n\n", hearder[0],hearder[1],extensions[category].mime_type,hearder[2]);
-                send(sock_client, buf, strlen(buf), 0);
-                while(!feof(fp)) {
-                    read_num=fread(buf, sizeof(char), sizeof(buf)-1, fp);
-                    send(sock_client, buf, read_num, 0);
-                }
+        if(fp==NULL) {
+            sprintf(buf,"%s404 NOT_FOUND\n%s\n%s\n\n",hearder[0],hearder[1],hearder[2]);
+            send(sock_client, buf, strlen(buf), 0);
+        } else {
+            sprintf(buf, "%s200 OK\n%s%s\n%s\n\n", hearder[0],hearder[1],extensions[category].mime_type,hearder[2]);
+            send(sock_client, buf, strlen(buf), 0);
+            while(!feof(fp)) {
+                read_num=fread(buf, sizeof(char), sizeof(buf)-1, fp);
+                send(sock_client, buf, read_num, 0);
             }
         }
     }
