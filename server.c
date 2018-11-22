@@ -138,6 +138,9 @@ int main(int argc, char *argv[])
         exit(-1);
     }
 
+
+
+
     /*waiting for the clients*/
     if(listen(sock_fd, 3)<0) {
         printf("listen failed\n");

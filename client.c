@@ -77,18 +77,23 @@ int main(int argc, char *argv[])
 
 
     int i=0, flag=0;
+    char temp[1024];
     while(recv(sock_fd, buf, buf_len-1, 0)) {
         printf("%s",buf);
-        if(flag==0)	/*first time recv the msg*/
-            if(buf[9]=='2') {	/*only when it is 200 OK, we fopen and deal with it*/
-                creat_dir(argv[2]);
-                fp=fopen(new_dest, "wb");
-                for(i=0; i<strlen(buf) && flag<4; ++i)	/*do not need to write header*/
-                    if(buf[i]=='\n')	/*there is 4 'n's in the header and 'n' is the last char in hearder*/
-                        ++flag;	/*flag will not return to zero*/
-                strncpy(buf, &buf[i], strlen(buf)-i);
-                fwrite(buf, sizeof(char), strlen(buf), fp);
-            }
+        if(buf[9]=='2' && buf[10]=='0' && buf[11]=='0') {	/*only when it is 200 OK, we fopen and deal with it*/
+            flag=0;
+            creat_dir(argv[2]);
+            fp=fopen(new_dest, "wb");
+            for(i=0; i<strlen(buf) && flag<4; ++i)	/*do not need to write header*/
+                if(buf[i]=='\n')	/*there is 4 'n's in the header and 'n' is the last char in hearder*/
+                    ++flag;	/*flag will not return to zero*/
+            memset(temp, 0, sizeof(temp));
+            strcpy(temp,buf);
+            memset(buf, 0, sizeof(buf));
+            strncpy(buf, &temp[i], strlen(temp)-i);
+        }
+        if(flag)
+            fwrite(buf, sizeof(char), strlen(buf), fp);
         memset(buf, 0, buf_len);
     }
     printf("\n");
