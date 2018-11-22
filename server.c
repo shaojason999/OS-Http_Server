@@ -5,6 +5,7 @@
 #include <netinet/in.h>
 #include <unistd.h>
 #include <pthread.h>
+#include <dirent.h>
 #include "server.h"
 #include "status.h"
 
@@ -23,13 +24,14 @@ int my_addr_len;
 char hearder[3][100]= {"HTTP/1.x ","Content-type: ","Server: httpserver/1.x"};
 char buf[1024];
 int buf_len=sizeof(buf);
-char file_dir[256];
+//char file_dir[256];
 int category;
 pthread_mutex_t mutex;
 pthread_cond_t cond;
 queue *q;
+char buf[1024], file_dir[128];
 
-int get_inform(char *buf)
+int get_inform(char *buf, char *file_dir)
 {
     int space_start, space_end;
     int i;
@@ -47,7 +49,6 @@ int get_inform(char *buf)
     }
     memset(file_dir, 0, sizeof(file_dir));
     strncpy(file_dir, &buf[space_start+1], (space_end-space_start-1));
-
     /*get the .html or others*/
     if(file_dir[0]!='/')
         return 5;	/*bad request*/
@@ -67,11 +68,12 @@ int get_inform(char *buf)
     if(last_dot!=-1) {	/*may be one of the type*/
         int the_same;
         char temp[128];
+        memset(temp, 0, sizeof(temp));
         strncpy(temp, &buf[space_start+1+last_dot+1],(space_end-(space_start+1+last_dot+1)));
         for(i=0; i<8; ++i) {
             the_same=strcmp(temp,extensions[i].ext);
             if(the_same==0) {
-                /**/			printf("%s\n",file_dir);
+                //            /**/			printf("%s\n",file_dir);
                 category=i;
                 return 0;	/*success, may be a file*/
             }
@@ -83,13 +85,73 @@ int get_inform(char *buf)
 
 
 }
-int output(int result, int sock_client)
+int output(int result, int sock_client, char *file_dir)
 {
-    char buf[1024];
+//    char buf[1024];
     FILE *fp=NULL;
     int read_num;
-    memset(buf, 0, sizeof(buf));
 
+
+    memset(buf, 0, sizeof(buf));
+    if(result==1) {
+        DIR *dir_ptr;
+        struct dirent *direntp;
+        /*	    int first_slash=-1;
+        	    int i;
+        		char temp[128], partial_file_dir[128];
+        		memset(temp, 0, sizeof(temp));
+        		memset(partial_file_dir, 0, sizeof(partial_file_dir));
+        	    for(i=0; i<strlen(file_dir); ++i)
+        	        if(file_dir[i]=='/' && first_slash==-1)
+        	            first_slash=i;
+        	    	else if(file_dir[i]=='/' && first_slash!=-1){
+        			strncpy(temp, &file_dir[first_slash], i-first_slash);
+        			strcat(partial_file_dir, temp);
+        			dir_ptr=opendir(partial_file_dir);
+        			if(dir_ptr==NULL){
+        				printf("opendir failed\n");
+        				break;
+        			}
+        			closedir(dir_ptr);
+        			first_slash=i;
+        		}
+        */
+        char temp[256], dest[256], name_of_file_dir[256];
+        memset(temp, 0, sizeof(temp));
+        sprintf(temp, ".%s",file_dir);
+        memset(file_dir, 0, sizeof(file_dir));
+        strcpy(file_dir, temp);
+        dir_ptr=opendir(file_dir);
+        printf("%s\n",file_dir);
+        if(dir_ptr==NULL) {
+            printf("opendir failed\n");
+            sprintf(buf,"%s404 NOT_FOUND\n%s\n%s\n\n",hearder[0],hearder[1],hearder[2]);
+            send(sock_client, buf, strlen(buf), 0);
+            return 0;
+        }
+        memset(dest, 0, sizeof(dest));
+        memset(temp, 0, sizeof(temp));
+        int j=0;
+        while((direntp=readdir(dir_ptr))!=NULL) {
+            memset(name_of_file_dir, 0, sizeof(name_of_file_dir));
+            strcpy(name_of_file_dir,direntp->d_name);
+            if(name_of_file_dir[0]=='.')
+                continue;
+            if(j==0) {
+                sprintf(dest,"%s",name_of_file_dir);
+                ++j;
+            } else
+                sprintf(dest,"%s %s",temp, name_of_file_dir);
+            //printf("%s\n",direntp->d_name);
+            memset(temp, 0, sizeof(temp));
+            strcpy(temp,dest);
+        }
+        printf("%s\n",dest);
+        memset(buf, 0, sizeof(buf));
+        sprintf(buf, "%s200 OK\n%s directory\n%s\n\n", hearder[0],hearder[1],hearder[2]);
+        send(sock_client, buf, strlen(buf), 0);
+        closedir(dir_ptr);
+    }
     if(result==5) {
         sprintf(buf,"%s400 BAD_REQUEST\n%s\n%s\n\n",hearder[0],hearder[1],hearder[2]);
         send(sock_client, buf, strlen(buf), 0);
@@ -99,7 +161,7 @@ int output(int result, int sock_client)
     } else if(result==7) {
         sprintf(buf,"%s415 UNSUPPORT_MEDIA_TYPE\n%s\n%s\n\n",hearder[0],hearder[1],hearder[2]);
         send(sock_client, buf, strlen(buf), 0);
-    } else if(result==0 || result==1) {
+    } else if(result==0) {
 
         /*get the file or dir*/
         if(result==0) {
@@ -187,14 +249,12 @@ int queue_get()
 }
 void do_processing(int que_num)
 {
-    char buf[1024];
     int result;
     memset(buf, 0, sizeof(buf));
     recv(que_num, buf, sizeof(buf), 0);
-
-    result=get_inform(buf);
-
-    output(result, que_num);
+    result=get_inform(buf, file_dir);
+// printf("%d\n",result);
+    output(result, que_num, file_dir);
 
     close(que_num);
 
