@@ -47,7 +47,7 @@ int get_inform(char *buf, char *file_dir)
             break;
         }
     }
-    memset(file_dir, 0, sizeof(file_dir));
+    memset(file_dir, 0, sizeof(char)*128);
     strncpy(file_dir, &buf[space_start+1], (space_end-space_start-1));
     /*get the .html or others*/
     if(file_dir[0]!='/')
@@ -73,7 +73,6 @@ int get_inform(char *buf, char *file_dir)
         for(i=0; i<8; ++i) {
             the_same=strcmp(temp,extensions[i].ext);
             if(the_same==0) {
-                //            /**/			printf("%s\n",file_dir);
                 category=i;
                 return 0;	/*success, may be a file*/
             }
@@ -96,33 +95,12 @@ int output(int result, int sock_client, char *file_dir)
     if(result==1) {
         DIR *dir_ptr;
         struct dirent *direntp;
-        /*	    int first_slash=-1;
-        	    int i;
-        		char temp[128], partial_file_dir[128];
-        		memset(temp, 0, sizeof(temp));
-        		memset(partial_file_dir, 0, sizeof(partial_file_dir));
-        	    for(i=0; i<strlen(file_dir); ++i)
-        	        if(file_dir[i]=='/' && first_slash==-1)
-        	            first_slash=i;
-        	    	else if(file_dir[i]=='/' && first_slash!=-1){
-        			strncpy(temp, &file_dir[first_slash], i-first_slash);
-        			strcat(partial_file_dir, temp);
-        			dir_ptr=opendir(partial_file_dir);
-        			if(dir_ptr==NULL){
-        				printf("opendir failed\n");
-        				break;
-        			}
-        			closedir(dir_ptr);
-        			first_slash=i;
-        		}
-        */
         char temp[256], dest[256], name_of_file_dir[256];
         memset(temp, 0, sizeof(temp));
         sprintf(temp, ".%s",file_dir);
-        memset(file_dir, 0, sizeof(file_dir));
+        memset(file_dir, 0, sizeof(char)*128);
         strcpy(file_dir, temp);
         dir_ptr=opendir(file_dir);
-        printf("%s\n",file_dir);
         if(dir_ptr==NULL) {
             printf("opendir failed\n");
             sprintf(buf,"%s404 NOT_FOUND\n%s\n%s\n\n",hearder[0],hearder[1],hearder[2]);
@@ -142,13 +120,11 @@ int output(int result, int sock_client, char *file_dir)
                 ++j;
             } else
                 sprintf(dest,"%s %s",temp, name_of_file_dir);
-            //printf("%s\n",direntp->d_name);
             memset(temp, 0, sizeof(temp));
             strcpy(temp,dest);
         }
-        printf("%s\n",dest);
         memset(buf, 0, sizeof(buf));
-        sprintf(buf, "%s200 OK\n%s directory\n%s\n\n", hearder[0],hearder[1],hearder[2]);
+        sprintf(buf,"%s200 OK\n%s directory\n%s\n\n%s",hearder[0],hearder[1],hearder[2],dest);
         send(sock_client, buf, strlen(buf), 0);
         closedir(dir_ptr);
     }

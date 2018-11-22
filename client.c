@@ -80,7 +80,7 @@ int main(int argc, char *argv[])
     char temp[1024];
     while(recv(sock_fd, buf, buf_len-1, 0)) {
         printf("%s",buf);
-        if(buf[9]=='2' && buf[10]=='0' && buf[11]=='0') {	/*only when it is 200 OK, we fopen and deal with it*/
+        if(buf[9]=='2' && buf[10]=='0' && buf[11]=='0' && buf[31]!='d') {	/*only when it is 200 OK, we fopen and deal with it*/
             flag=0;
             creat_dir(argv[2]);
             fp=fopen(new_dest, "wb");
