@@ -4,18 +4,32 @@
 #include <string.h>
 #include <netinet/in.h>
 #include <unistd.h>
+#include <pthread.h>
 #include "server.h"
 #include "status.h"
 
+typedef struct queue {
+    int capacity;
+    int size;
+    int front;
+    int rear;
+    int *elements;
+} queue;
+
 /*sock_fd is used to listen to the requests, and the sock_client is connted to the clients actually*/
 int sock_fd, sock_client;
+struct sockaddr_in my_addr;
+int my_addr_len;
 char hearder[3][100]= {"HTTP/1.x ","Content-type: ","Server: httpserver/1.x"};
 char buf[1024];
 int buf_len=sizeof(buf);
 char file_dir[256];
 int category;
+pthread_mutex_t mutex;
+pthread_cond_t cond;
+queue *q;
 
-int get_inform()
+int get_inform(char *buf)
 {
     int space_start, space_end;
     int i;
@@ -49,6 +63,7 @@ int get_inform()
     for(i=last_slash+1; i<strlen(file_dir); ++i)
         if(file_dir[i]=='.')
             last_dot=i;
+    /*there exist a dot*/
     if(last_dot!=-1) {	/*may be one of the type*/
         int the_same;
         char temp[128];
@@ -68,11 +83,13 @@ int get_inform()
 
 
 }
-int output(int result)
+int output(int result, int sock_client)
 {
+    char buf[1024];
     FILE *fp=NULL;
     int read_num;
     memset(buf, 0, sizeof(buf));
+
     if(result==5) {
         sprintf(buf,"%s400 BAD_REQUEST\n%s\n%s\n\n",hearder[0],hearder[1],hearder[2]);
         send(sock_client, buf, strlen(buf), 0);
@@ -108,18 +125,112 @@ int output(int result)
     return 0;
 
 }
+queue *create_queue(int que_num)
+{
+    queue *Q;
+    Q=(queue*)malloc(sizeof(queue));
+    Q->elements=(int*)malloc(sizeof(int)*que_num);
+    Q->size=0;
+    Q->capacity=que_num;
+    Q->front=0;
+    Q->rear=-1;
+
+    return Q;
+}
+int empty(queue *Q)
+{
+    if(Q->size==0)
+        return 1;
+    else
+        return 0;
+}
+void pop(queue *Q)
+{
+    if(Q->size!=0) {
+        Q->size--;
+        Q->front++;
+
+        if(Q->front==Q->capacity)
+            Q->front=0;
+    }
+}
+int peek(queue *Q)
+{
+    return Q->elements[Q->front];
+}
+void push(queue *Q, int element)
+{
+    if(Q->size!=Q->capacity) {
+        Q->size++;
+        Q->rear=Q->rear+1;
+        if(Q->rear==Q->capacity)
+            Q->rear=0;
+        Q->elements[Q->rear]=element;
+    }
+}
+int queue_get()
+{
+    pthread_mutex_lock(&mutex);
+    while(empty(q)==1) {	/*not empty*/
+        /**/		if(pthread_cond_wait(&cond, &mutex)!=0) {
+            printf("cond wai error\n");
+            return -1;
+        }
+    }
+    /*pop*/
+    int que_num=peek(q);
+    pop(q);
+    pthread_mutex_unlock(&mutex);
+
+    return que_num;
+
+}
+void do_processing(int que_num)
+{
+    char buf[1024];
+    int result;
+    memset(buf, 0, sizeof(buf));
+    recv(que_num, buf, sizeof(buf), 0);
+
+    result=get_inform(buf);
+
+    output(result, que_num);
+
+    close(que_num);
+
+}
+void *accept_connection()
+{
+    int que_num;
+    while(1) {
+        que_num=accept(sock_fd, (struct sockaddr*)&my_addr, (socklen_t*)&my_addr_len);
+        if(que_num<0) {
+            printf("accept failed\n");
+            exit(-1);
+        }
+        pthread_mutex_lock(&mutex);
+        push(q,que_num);
+        pthread_mutex_unlock(&mutex);
+        pthread_cond_signal(&cond);
+    }
+}
+void *handle_connection()
+{
+    int que_num=0;
+    while(1) {
+        que_num=queue_get();
+        do_processing(que_num);
+    }
+}
 int main(int argc, char *argv[])
 {
-    int result;
-    /*important! never forget*/
-    memset(buf, 0, buf_len);
-
-    struct sockaddr_in my_addr;
+    int i;
     memset(&my_addr, 0, sizeof(my_addr));
     my_addr.sin_family=AF_INET;
     my_addr.sin_port=htons(atoi(argv[4]));	/*solved the problem of big and little endian*/
     my_addr.sin_addr.s_addr=INADDR_ANY;
-    int my_addr_len=sizeof(my_addr);
+    int thread_num;
+    my_addr_len=sizeof(my_addr);
 
     /*creat the socket and set the let the socket know the information about server itself*/
     sock_fd=socket(AF_INET, SOCK_STREAM, 0);
@@ -138,8 +249,16 @@ int main(int argc, char *argv[])
         exit(-1);
     }
 
+    thread_num=atoi(argv[6]);
+    q=create_queue(thread_num);
 
-
+    /*initialize the mutex global variable and declare the thread pool array with 10 threads*/
+    pthread_mutex_init(&mutex,NULL);
+    pthread_t thread_pool[thread_num];
+    /*thread create with one main thread and other threads*/
+    pthread_create(&thread_pool[0], NULL, accept_connection, (void*)NULL);
+    for(i=1; i<thread_num; ++i)
+        pthread_create(&thread_pool[i], NULL, handle_connection, (void*)NULL);
 
     /*waiting for the clients*/
     if(listen(sock_fd, 3)<0) {
@@ -148,17 +267,14 @@ int main(int argc, char *argv[])
     }
 
     /*creat a new socket to recv/send with client*/
-    sock_client=accept(sock_fd, (struct sockaddr*)&my_addr, (socklen_t*)&my_addr_len);
-    if(sock_client<0) {
-        printf("accept failed\n");
-        exit(-1);
+    while(1) {
     }
 
-    recv(sock_client, buf, sizeof(buf), 0);
+    /*    recv(sock_client, buf, sizeof(buf), 0);
 
-    result=get_inform();
-    output(result);
-
+        result=get_inform();
+        output(result);
+    */
     close(sock_client);
     close(sock_fd);
 
