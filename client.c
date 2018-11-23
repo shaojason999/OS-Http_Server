@@ -77,13 +77,28 @@ int main(int argc, char *argv[])
 
 
     int i=0, flag=0;
+//   int count=0, start=-1;
     char temp[1024];
     while(recv(sock_fd, buf, buf_len-1, 0)) {
         printf("%s",buf);
-        if(buf[9]=='2' && buf[10]=='0' && buf[11]=='0' && buf[31]!='d') {	/*only when it is 200 OK, we fopen and deal with it*/
+        /*        if(buf[9]=='2' && buf[10]=='0' && buf[11]=='0' && buf[31]=='d'){
+        		count=0;
+        		if(i=0;i<strlen(buf) && count<4;++i)
+        			if(buf[i]=='\n')
+        				++count;
+        		if(start=i;i<strlen(buf);++i)
+        			if(buf[i]==' '){
+        				memset(dir_temp, 0, sizeof(dir_temp));
+        				strncpy(dir_temp, buf[start], i-start);
+
+
+
+
+        	}
+          */      if(buf[9]=='2' && buf[10]=='0' && buf[11]=='0' && buf[31]!='d') {	/*only when it is 200 OK, we fopen and deal with it*/
             flag=0;
             creat_dir(argv[2]);
-            fp=fopen(new_dest, "wb");
+            fp=fopen(new_dest, "wb");	/*new_dest is a parameter of creat_dir*/
             for(i=0; i<strlen(buf) && flag<4; ++i)	/*do not need to write header*/
                 if(buf[i]=='\n')	/*there is 4 'n's in the header and 'n' is the last char in hearder*/
                     ++flag;	/*flag will not return to zero*/
@@ -96,7 +111,6 @@ int main(int argc, char *argv[])
             fwrite(buf, sizeof(char), strlen(buf), fp);
         memset(buf, 0, buf_len);
     }
-    printf("\n");
     if(flag!=0)
         fclose(fp);
     close(sock_fd);
