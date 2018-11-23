@@ -103,6 +103,7 @@ int output(int result, int sock_client, char *file_dir)
 //        memset(file_dir, 0, sizeof(char)*128);
         //      strcpy(file_dir, temp);
         dir_ptr=opendir(temp);
+        /*check if the dir exists*/
         if(dir_ptr==NULL) {
             printf("opendir failed\n");
             sprintf(buf,"%s404 NOT_FOUND\n%s\n%s\n\n",hearder[0],hearder[1],hearder[2]);
@@ -111,14 +112,18 @@ int output(int result, int sock_client, char *file_dir)
         }
         memset(dest, 0, sizeof(dest));
         memset(temp, 0, sizeof(temp));
-        int i=0,j=0,flag=0;
+        int i=0,j=0;
+        /*get every subfile and subdir*/
         while((direntp=readdir(dir_ptr))!=NULL) {
             memset(name_of_file_dir, 0, sizeof(name_of_file_dir));
             strcpy(name_of_file_dir,direntp->d_name);
+            /*exclude the . and .. dir*/
             if(name_of_file_dir[0]=='.')
                 continue;
+            /*deal with later*/
             memset(file_dir_arr[i], 0, sizeof(file_dir_arr[i]));
             strcpy(file_dir_arr[i++],name_of_file_dir);
+            /*fisrt found and other founds*/
             if(j==0) {
                 sprintf(dest,"%s",name_of_file_dir);
                 ++j;
@@ -128,18 +133,35 @@ int output(int result, int sock_client, char *file_dir)
             strcpy(temp,dest);
         }
         memset(buf, 0, sizeof(buf));
-        sprintf(buf,"%s200 OK\n%s directory\n%s\n\n%s",hearder[0],hearder[1],hearder[2],dest);
+        sprintf(buf,"%s200 OK\n%s directory\n%s\n\n%s\n",hearder[0],hearder[1],hearder[2],dest);
         send(sock_client, buf, strlen(buf), 0);
-        int num=i;
+        int num=i, last_dot, k;
         char Temp[i][256];
+        char dot_temp[128];
         for(i=0; i<num; ++i) {
             memset(Temp[i], 0, sizeof(Temp[i]));
             for(j=1; j<strlen(file_dir_arr[i]); ++j)
+                /*a file(not a dir)*/
                 if(file_dir_arr[i][j]=='.') {
-                    sprintf(Temp[i],"%s/%s",file_dir,file_dir_arr[i]);	/*a file*/
+                    sprintf(Temp[i],"%s/%s",file_dir,file_dir_arr[i]);
 //printf("%d %s %s\n",strlen(file_dir_arr[i]),Temp[i],file_dir_arr[i]);
-                    /*category*/
-                    output(0,sock_client,Temp[i]);
+                    /*find the category of the file(.thml, .css, ...)*/
+                    last_dot=-1;
+                    for(k=0; k<strlen(Temp[i]); ++k)
+                        if(Temp[i][k]=='.')
+                            last_dot=k;
+                    memset(dot_temp, 0, sizeof(dot_temp));
+                    strncpy(dot_temp, &Temp[i][last_dot+1], (strlen(Temp[i])-last_dot-1));
+                    for(k=0; k<8; ++k) {
+                        int the_same=strcmp(dot_temp, extensions[k].ext);
+                        if(the_same==0) {
+                            category=k;	/*a parameter in output()*/
+                            break;
+                        }
+                    }
+                    /*unsupported_media_type*/
+                    if(k!=8)
+                        output(0,sock_client,Temp[i]);
                     break;
                 }
         }
@@ -172,6 +194,10 @@ int output(int result, int sock_client, char *file_dir)
                 read_num=fread(buf, sizeof(char), sizeof(buf)-1, fp);
                 send(sock_client, buf, read_num, 0);
             }
+            /*send a '\n' in the end of a file*/
+            memset(buf, 0, sizeof(buf));
+            sprintf(buf,"\n");
+            send(sock_client, buf, strlen(buf), 0);
         }
     }
 
